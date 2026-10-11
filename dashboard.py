@@ -5,6 +5,8 @@ import plotly.express as px
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
+import cat_meme
+
 load_dotenv()
 
 MOOD_COLORS = {
@@ -15,6 +17,11 @@ MOOD_COLORS = {
 }
 
 SPOTIFY_GREEN = "#1DB954"
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def weekly_cat(mood, week):
+    """Cat meme for this week's dominant mood (None if CATAAS is unavailable)."""
+    return cat_meme.get_cat_meme(mood, week)
 SPOTIFY_TRACK_URL = "https://open.spotify.com/track/"
 
 def with_spotify_link(df):
@@ -133,7 +140,32 @@ st.markdown("""
  audio_mood, audio_coverage, today_tracks, top_tracks_week, top_artists_week,
  discovered_recently, liked_tracks) = load_data()
 
-st.title("🎧 My Listening & Mood")
+title_col, cat_col = st.columns([4, 1])
+with title_col:
+    st.title("🎧 My Listening & Mood")
+with cat_col:
+    week_mood = cat_meme.weekly_dominant_mood(daily_mood)
+    if week_mood and os.getenv("CAT_MEME", "on").lower() != "off":
+        meme = weekly_cat(week_mood, cat_meme.week_key())
+        color = MOOD_COLORS.get(week_mood, "#999999")
+        if meme:
+            visual = (
+                '<div style="position:relative;display:inline-block;">'
+                f'<img src="{meme["url"]}" alt="{meme["caption"]}" '
+                f'style="width:100%;max-width:260px;border-radius:12px;border:3px solid {color};display:block;">'
+                '<div style="position:absolute;left:6px;right:6px;bottom:8px;text-align:center;'
+                'font:800 1.05rem Impact,Arial Black,sans-serif;color:#fff;text-transform:uppercase;'
+                'text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;">'
+                f'{meme["caption"]}</div></div>'
+            )
+        else:
+            visual = f'<div style="font-size:4rem;line-height:1;">{cat_meme.EMOJI[week_mood]}</div>'
+        st.markdown(
+            f'<div style="text-align:right;">{visual}'
+            f'<div style="font-size:0.8rem;opacity:0.75;margin-top:4px;">'
+            f'Your week: <b style="color:{color};">{week_mood.capitalize()}</b></div></div>',
+            unsafe_allow_html=True,
+        )
 
 st.components.v1.html("""
 <style>

@@ -1,6 +1,6 @@
 ﻿# Spotify Mood Pipeline
 
-> Based on [sarthakgh29/spotify-mood-pipeline](https://github.com/sarthakgh29/spotify-mood-pipeline) by Sarthak Sharma (no license file in the original). This copy is adapted and extended for personal use.
+> Based on [sarthakgh29/spotify-mood-pipeline](https://github.com/sarthakgh29/spotify-mood-pipeline) by Sarthak Sharma (no license file in the original). This copy is adapted and extended for personal use. See [CHANGES.md](CHANGES.md) for what differs.
 
 An end-to-end data pipeline that turns Spotify listening history into a daily "mood" signal, with an interactive dashboard for exploring and reacting to it.
 

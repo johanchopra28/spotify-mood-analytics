@@ -27,3 +27,6 @@ create table if not exists liked_tracks (
     artist_names text,
     liked_at     timestamptz not null default now()
 );
+
+-- Day bucketing in dbt marts and the dashboard follows the session timezone.
+alter database spotify_data set timezone to 'Asia/Kolkata';

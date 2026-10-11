@@ -72,6 +72,10 @@ def load_data():
         ORDER BY liked_at DESC
     """, engine)
 
+    # pandas converts timestamptz to UTC; day buckets are IST midnights, so convert back
+    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track):
+        frame["listen_date"] = pd.to_datetime(frame["listen_date"], utc=True).dt.tz_convert("Asia/Kolkata")
+
     return (daily_listening, daily_mood, dominant_mood, daily_top_track,
             today_tracks, top_tracks_week, top_artists_week,
             discovered_recently, liked_tracks)
@@ -370,7 +374,7 @@ st.markdown("---")
 with st.expander("🕒 Today's full play history"):
     if not today_tracks.empty:
         df = today_tracks.copy()
-        df["Time"] = pd.to_datetime(df["played_at"]).dt.strftime("%H:%M")
+        df["Time"] = pd.to_datetime(df["played_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%H:%M")
         df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
         st.dataframe(df[["Time", "Track", "Artist"]], width="stretch", hide_index=True)
     else:
@@ -405,7 +409,7 @@ st.markdown('<div id="liked-songs"></div>', unsafe_allow_html=True)
 st.subheader("❤️ Liked songs")
 if not liked_tracks.empty:
     df = liked_tracks.copy()
-    df["Liked"] = pd.to_datetime(df["liked_at"]).dt.strftime("%b %d")
+    df["Liked"] = pd.to_datetime(df["liked_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%b %d")
     df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
     st.dataframe(df[["Track", "Artist", "Liked"]], width="stretch", hide_index=True)
 else:

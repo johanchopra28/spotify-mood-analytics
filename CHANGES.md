@@ -37,6 +37,14 @@ The history here is a fresh start: the original's commits are not included (they
 - **Schedule:** `serve()` no longer accepts a `timezone` argument in Prefect 3.8, so the flow now uses `Cron("0 20 * * *", timezone="Asia/Kolkata")`.
 - **Server required:** Prefect cannot schedule on its ephemeral server. Run `prefect server start` with `PREFECT_API_DATABASE_CONNECTION_URL` pointing at a `prefect_meta` database (created in the same Postgres), then set `PREFECT_API_URL=http://127.0.0.1:4200/api` before `python pipeline_flow.py`. Both processes must stay running, and neither restarts by itself after a reboot.
 
+## Validation analysis: genre-based vs audio-based mood
+- **dbt:** marts `mood_comparison_track` (tracks with both a genre mood and an audio mood) and `mood_comparison_artist` (artist audio mood = most common audio mood across their tracks, alphabetical tie-break), with tests.
+- **`analysis/`:** `export_mood_data.py` writes both tables to CSV; `validate_moods.py` (pandas + scikit-learn) and `validate_moods.do` (Stata) report percent agreement, a confusion matrix (rows = genre mood, columns = audio mood) and Cohen's kappa at track and artist level. The Python and Stata results match.
+- **Run it:** `python analysis/export_mood_data.py`, then `python analysis/validate_moods.py`; for Stata, run `validate_moods.do` from the `analysis/` folder. Generated CSVs and Stata logs are gitignored.
+- **First result (11 tracks, 7 artists):** 54.5% agreement and kappa 0.07 at track level; 42.9% and kappa 0.03 at artist level. With this few rows, and the genre mood labelling 10 of 11 tracks "intense", kappa is unstable and should not be over-read. ReccoBeats coverage also skews toward older tracks.
+- **Tests:** `tests/test_mood_stats.py` checks kappa against a hand-computed example.
+- `scikit-learn` was added to `requirements.txt`.
+
 ## Known issues carried over from the original
 - Spotify's recently-played endpoint returns at most 50 plays, so the pipeline must run regularly to avoid gaps. One run a day can lose plays on heavy-listening days.
 - The README's "11 dbt tests" is out of date (30 now).

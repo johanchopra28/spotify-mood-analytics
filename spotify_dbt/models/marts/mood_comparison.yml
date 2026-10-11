@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: mood_comparison_track
+    description: "Tracks with both a genre-based and an audio-based mood, for the validation analysis."
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique
+      - name: genre_mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']
+      - name: audio_mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']
+
+  - name: mood_comparison_artist
+    description: "Artists with both moods; audio mood is the modal audio mood across their tracks."
+    columns:
+      - name: primary_artist_id
+        tests:
+          - not_null
+          - unique
+      - name: genre_mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']
+      - name: audio_mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']

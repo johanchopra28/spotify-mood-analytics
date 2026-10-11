@@ -7,3 +7,5 @@ spotify_dbt/profiles.yml
 spotify_dbt/target/
 spotify_dbt/dbt_packages/
 spotify_dbt/.user.yml
+analysis/output/
+analysis/*.log

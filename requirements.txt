@@ -9,3 +9,4 @@ streamlit
 plotly
 pandas
 sqlalchemy<2.1
+scikit-learn

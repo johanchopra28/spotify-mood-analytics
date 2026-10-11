@@ -1,5 +1,6 @@
 import subprocess
 from prefect import flow, task
+from prefect.schedules import Cron
 
 # Reuse the exact same functions from ingest.py — no duplicate logic
 from ingest import (fetch_recently_played, transform, load, get_unique_artists,
@@ -46,6 +47,5 @@ def spotify_pipeline():
 if __name__ == "__main__":
     spotify_pipeline.serve(
         name="spotify-daily-deployment",
-        cron="0 20 * * *",
-        timezone="Asia/Kolkata"
+        schedule=Cron("0 20 * * *", timezone="Asia/Kolkata"),
     )

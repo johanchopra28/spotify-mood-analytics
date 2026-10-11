@@ -1,34 +1,52 @@
 # Changes from the original
 
-This project is built on [sarthakgh29/spotify-mood-pipeline](https://github.com/sarthakgh29/spotify-mood-pipeline) by Sarthak Sharma. The original has no license file. The architecture (Spotify + Last.fm -> Postgres -> dbt -> Prefect -> Streamlit), the dbt models and the dashboard are his. This copy was adapted and extended by Johan Chopra, as listed below.
+This project is built on [sarthakgh29/spotify-mood-pipeline](https://github.com/sarthakgh29/spotify-mood-pipeline) by Sarthak Sharma. The original has no license file. The architecture (Spotify + Last.fm -> Postgres -> dbt -> Prefect -> Streamlit), the original dbt models and the original dashboard are his. This copy was adapted and extended by Johan Chopra, as listed below.
 
-The history here is a fresh start: the original's commits are not included.
+The history here is a fresh start: the original's commits are not included (they contained a committed `logs/dbt.log`).
 
 ## Setup and infrastructure
-- **`sql/init.sql` (new):** DDL for `raw_recently_played`, `raw_artist_genres` and `liked_tracks`. The original repo had none. Columns were inferred from `ingest.py`, `dashboard.py` and the staging SQL. It is mounted into the Postgres container via `docker-compose.yml`.
+- **`sql/init.sql` (new):** DDL for `raw_recently_played`, `raw_artist_genres`, `liked_tracks` and `raw_audio_features`. The original repo had none. Columns for the first three were inferred from `ingest.py`, `dashboard.py` and the staging SQL. The file is mounted into the Postgres container via `docker-compose.yml` and runs on first start of an empty volume.
 - **`requirements.txt`:** replaced the UTF-16, ~150-package freeze (including Windows-only `pywin32`) with a trimmed list of direct dependencies. `sqlalchemy` is pinned below 2.1 because 2.1 defaults to psycopg3 and the dashboard needs psycopg2.
-- **`.gitignore`:** added `logs/`, `spotify_dbt/profiles.yml`, `spotify_dbt/target/`, `spotify_dbt/dbt_packages/` and `spotify_dbt/.user.yml`. The original committed `logs/dbt.log`.
+- **`.gitignore`:** added `logs/`, `spotify_dbt/profiles.yml`, `spotify_dbt/target/`, `spotify_dbt/dbt_packages/` and `spotify_dbt/.user.yml`.
 - **dbt profile:** `profiles.yml` is created locally (profile `spotify_dbt`, schema `dbt_dev`) and is not committed.
+- **Docs:** the README credits the original and links here.
 
 ## Data and models
 - **`seeds/genre_mood_map.csv`:** extended with about 45 genre-to-mood rows for tags found in Johan's Last.fm data. Place and label tags (e.g. `india`, `canada`) map to `unclassified`.
 - **`stg_artist_moods.sql`:** added `mood` as a tie-breaker in the ranking. Without it, an artist with equally many tags in two moods got an arbitrary mood that changed between runs.
+- **`daily_top_track`:** now carries `track_id` (needed for the Spotify links).
 
 ## Timezone (IST)
-- **Database:** `alter database spotify_data set timezone to 'Asia/Kolkata'`, so day bucketing in the dbt marts follows IST.
+- **Database:** `alter database spotify_data set timezone to 'Asia/Kolkata'`, so day bucketing in the dbt marts follows IST. Existing databases need this run by hand, because `init.sql` only runs on an empty volume.
 - **`dashboard.py`:** play times, liked-at dates and daily labels are explicitly converted to `Asia/Kolkata`, because pandas converts `timestamptz` to UTC on read.
 
 ## ReccoBeats audio features
-- **`raw_audio_features` (new table) and `ingest.py`:** after the plays load, uncached tracks are sent to `https://api.reccobeats.com/v1/audio-features` using Spotify track IDs directly, in batches of 40 (the API's limit; larger requests return HTTP 400). Tracks ReccoBeats does not know are cached as `found = false` and retried after 30 days. 429 responses honour `Retry-After`.
-- **dbt:** `stg_audio_features`, `stg_track_audio_moods` and the mart `daily_audio_mood_summary`, with tests (feature values in [0, 1], accepted mood values, unique track IDs).
+- **Ingest:** `ingest.py` sends uncached tracks to `https://api.reccobeats.com/v1/audio-features` using Spotify track IDs directly, in batches of 40 (the API's limit; larger requests return HTTP 400). Results go to `raw_audio_features`, keyed by Spotify `track_id`. Tracks ReccoBeats does not know are cached as `found = false` and retried after 30 days. 429 responses honour `Retry-After`.
+- **dbt models:** `stg_audio_features`, `stg_track_audio_moods` and the mart `daily_audio_mood_summary`, with tests (feature values in [0, 1], accepted mood values, unique track IDs).
 - **Audio mood mapping** (valence x energy, cut-off 0.5): upbeat = high valence + high energy, intense = low valence + high energy, calm = high valence + low energy, mellow = low valence + low energy.
 - **Dashboard:** new "Audio mood (ReccoBeats)" section with a coverage caption.
-- **`pipeline_flow.py`:** now also fetches artist genres and audio features (the original flow skipped the genre fetch).
-- **Spotify links:** every track shown on the dashboard links to its Spotify page (a "▶ Open" column in the tables, linked titles in "Discovered recently"). `daily_top_track` now carries `track_id`.
-- **Why ReccoBeats misses tracks:** tested on 50 tracks, coverage depends mainly on release year, about 73% for tracks released up to 2024 versus about 11% for 2025 and later. Re-requesting misses (singly or in batch) returns nothing new, so misses are not transient.
-- **Prefect schedule:** `serve()` no longer accepts a `timezone` argument in Prefect 3.8, so the flow now uses `Cron("0 20 * * *", timezone="Asia/Kolkata")`. Scheduling needs a real Prefect server (an ephemeral one cannot schedule); run `prefect server start` with `PREFECT_API_DATABASE_CONNECTION_URL` pointing at a `prefect_meta` database, then set `PREFECT_API_URL=http://127.0.0.1:4200/api` before `python pipeline_flow.py`. Both processes must stay running.
-- **Weekly mood cat meme:** `cat_meme.py` picks the dominant genre-based mood of the last 7 days, queries [CATAAS](https://cataas.com) for cats tagged with matching words, and the dashboard shows one in the top right with a meme caption. The pick is deterministic per ISO week, cached, and skips cats with blocked tags (CATAAS tags are user-submitted, so this reduces but cannot remove the chance of an unwanted image). If CATAAS is down, an emoji card is shown instead; set `CAT_MEME=off` to disable. CATAAS's `/says/` caption endpoint returns HTTP 500 when `width` is set, so captions are drawn in HTML. Unit tests: `python -m unittest discover tests`.
-- **Caveats:** the features are ReccoBeats' estimates, not Spotify's. Coverage in Johan's data was 15 of 50 tracks (30%) when first tested.
+- **Caveats:** the features are ReccoBeats' estimates, not Spotify's. Coverage in Johan's data was 15 of 50 tracks (30%) when first tested. It depends mainly on release year: about 73% for tracks released up to 2024 versus about 11% for 2025 and later. Re-requesting misses (singly or in batch) returned nothing new, so misses are not transient. Spotify's own audio-features endpoint is closed to new apps, which is why ReccoBeats is used.
+
+## Dashboard
+- **Spotify links:** every track shown on the dashboard links to its Spotify page (a "▶ Open" column in the tables, linked titles in "Discovered recently").
+- **Audio mood section:** see above.
+- **IST display:** see above.
+
+## Orchestration (Prefect)
+- **`pipeline_flow.py`:** now also fetches artist genres and audio features. The original flow skipped the genre fetch, so scheduled runs never tagged new artists.
+- **Schedule:** `serve()` no longer accepts a `timezone` argument in Prefect 3.8, so the flow now uses `Cron("0 20 * * *", timezone="Asia/Kolkata")`.
+- **Server required:** Prefect cannot schedule on its ephemeral server. Run `prefect server start` with `PREFECT_API_DATABASE_CONNECTION_URL` pointing at a `prefect_meta` database (created in the same Postgres), then set `PREFECT_API_URL=http://127.0.0.1:4200/api` before `python pipeline_flow.py`. Both processes must stay running, and neither restarts by itself after a reboot.
 
 ## Known issues carried over from the original
-- Spotify's recently-played endpoint returns at most 50 plays, so the pipeline must run regularly to avoid gaps.
+- Spotify's recently-played endpoint returns at most 50 plays, so the pipeline must run regularly to avoid gaps. One run a day can lose plays on heavy-listening days.
+- The README's "11 dbt tests" is out of date (30 now).
+
+## Optional: weekly mood cat meme (not practical)
+
+> **Flag: not practical.** This is a novelty feature. It depends on a free third-party service (CATAAS) whose tags are user-submitted and unfiltered, so an unwanted image can slip through, and it adds a network call to every dashboard load. The pool of cats per mood is small. Treat it as optional and disable it if you share or host the dashboard.
+
+- **What it does:** `cat_meme.py` picks the dominant genre-based mood of the last 7 days, queries [CATAAS](https://cataas.com) for cats tagged with matching words, and the dashboard shows one in the top right with a meme caption.
+- **Behaviour:** the pick is deterministic per ISO week and cached for 6 hours. Cats carrying blocked tags are skipped, which reduces but cannot remove the risk. If CATAAS is down, an emoji card is shown instead.
+- **Turn it off:** set `CAT_MEME=off`.
+- **CATAAS quirk:** its `/says/` caption endpoint returns HTTP 500 when `width` is set, so captions are drawn in HTML over the plain image.
+- **Tests:** `python -m unittest discover tests`.

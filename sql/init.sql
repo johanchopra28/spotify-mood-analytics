@@ -28,5 +28,26 @@ create table if not exists liked_tracks (
     liked_at     timestamptz not null default now()
 );
 
+-- ReccoBeats audio features (estimates, not Spotify's), keyed by Spotify track id.
+-- found = false caches a miss so it is not re-requested until retried.
+create table if not exists raw_audio_features (
+    track_id         text primary key,
+    found            boolean     not null,
+    fetched_at       timestamptz not null default now(),
+    reccobeats_id    text,
+    isrc             text,
+    acousticness     double precision,
+    danceability     double precision,
+    energy           double precision,
+    instrumentalness double precision,
+    liveness         double precision,
+    loudness         double precision,
+    speechiness      double precision,
+    tempo            double precision,
+    valence          double precision,
+    key              int,
+    mode             int
+);
+
 -- Day bucketing in dbt marts and the dashboard follows the session timezone.
 alter database spotify_data set timezone to 'Asia/Kolkata';

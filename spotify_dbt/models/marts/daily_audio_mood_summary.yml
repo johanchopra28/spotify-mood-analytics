@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: daily_audio_mood_summary
+    description: "Daily listening minutes by audio-based mood (ReccoBeats valence/energy); only plays with audio features are included."
+    columns:
+      - name: listen_date
+        tests:
+          - not_null
+      - name: mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']

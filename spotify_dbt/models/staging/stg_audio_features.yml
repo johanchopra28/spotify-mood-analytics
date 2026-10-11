@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: stg_audio_features
+    description: "ReccoBeats audio features per Spotify track. Estimates, not Spotify's own; tracks ReccoBeats does not know are absent."
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique
+      - name: acousticness
+        tests: &unit_range
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: danceability
+        tests: *unit_range
+      - name: energy
+        tests: *unit_range
+      - name: instrumentalness
+        tests: *unit_range
+      - name: liveness
+        tests: *unit_range
+      - name: speechiness
+        tests: *unit_range
+      - name: valence
+        tests: *unit_range
+
+  - name: stg_track_audio_moods
+    description: "Audio-based mood per track from valence/energy quadrants (0.5 cut-offs)."
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique
+      - name: audio_mood
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['calm', 'mellow', 'intense', 'upbeat']

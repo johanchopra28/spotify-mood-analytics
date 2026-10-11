@@ -16,3 +16,8 @@ sources:
         columns:
           - name: artist_id
             description: "Spotify's unique ID for the artist"
+      - name: raw_audio_features
+        description: "ReccoBeats audio features (estimates, not Spotify's) keyed by Spotify track ID. found = false rows are cached misses."
+        columns:
+          - name: track_id
+            description: "Spotify's unique ID for the track"

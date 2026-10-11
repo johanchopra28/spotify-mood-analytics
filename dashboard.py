@@ -32,6 +32,13 @@ def load_data():
     dominant_mood = pd.read_sql("SELECT * FROM dbt_dev.daily_dominant_mood ORDER BY listen_date DESC", engine)
     daily_top_track = pd.read_sql("SELECT * FROM dbt_dev.daily_top_track ORDER BY listen_date DESC", engine)
 
+    audio_mood = pd.read_sql("SELECT * FROM dbt_dev.daily_audio_mood_summary ORDER BY listen_date", engine)
+    audio_coverage = pd.read_sql("""
+        SELECT count(*) AS plays, count(a.track_id) AS plays_with_audio
+        FROM dbt_dev.stg_recently_played p
+        LEFT JOIN dbt_dev.stg_audio_features a USING (track_id)
+    """, engine)
+
     today_tracks = pd.read_sql("""
         SELECT played_at, track_name, artist_names
         FROM dbt_dev.stg_recently_played
@@ -73,11 +80,11 @@ def load_data():
     """, engine)
 
     # pandas converts timestamptz to UTC; day buckets are IST midnights, so convert back
-    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track):
+    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track, audio_mood):
         frame["listen_date"] = pd.to_datetime(frame["listen_date"], utc=True).dt.tz_convert("Asia/Kolkata")
 
     return (daily_listening, daily_mood, dominant_mood, daily_top_track,
-            today_tracks, top_tracks_week, top_artists_week,
+            audio_mood, audio_coverage, today_tracks, top_tracks_week, top_artists_week,
             discovered_recently, liked_tracks)
 
 def toggle_like(engine, track_id, track_name, artist_names):
@@ -110,7 +117,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 (daily_listening, daily_mood, dominant_mood, daily_top_track,
- today_tracks, top_tracks_week, top_artists_week,
+ audio_mood, audio_coverage, today_tracks, top_tracks_week, top_artists_week,
  discovered_recently, liked_tracks) = load_data()
 
 st.title("🎧 My Listening & Mood")
@@ -305,6 +312,27 @@ if not daily_mood.empty:
     st.components.v1.html(chart_html, height=470)
 else:
     st.info("No mood breakdown available yet.")
+
+st.write("")
+st.subheader("Audio mood (ReccoBeats)")
+cov = audio_coverage.iloc[0]
+st.caption(
+    "Mood from ReccoBeats valence/energy estimates (not Spotify's own), "
+    f"available for {int(cov['plays_with_audio'])} of {int(cov['plays'])} plays; "
+    "tracks ReccoBeats doesn't know are left out."
+)
+if not audio_mood.empty:
+    df = audio_mood.copy()
+    df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
+    df["Mood"] = df["mood"].str.capitalize()
+    fig_audio = px.bar(
+        df, x="Date", y="minutes_listened", color="Mood",
+        color_discrete_map={k.capitalize(): v for k, v in MOOD_COLORS.items()},
+        labels={"minutes_listened": "Minutes", "Date": ""},
+    )
+    st.plotly_chart(fig_audio, width="stretch")
+else:
+    st.info("No audio-feature data yet.")
 
 st.write("")
 st.markdown("---")

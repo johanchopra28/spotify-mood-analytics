@@ -18,6 +18,13 @@ The history here is a fresh start: the original's commits are not included.
 - **Database:** `alter database spotify_data set timezone to 'Asia/Kolkata'`, so day bucketing in the dbt marts follows IST.
 - **`dashboard.py`:** play times, liked-at dates and daily labels are explicitly converted to `Asia/Kolkata`, because pandas converts `timestamptz` to UTC on read.
 
+## ReccoBeats audio features
+- **`raw_audio_features` (new table) and `ingest.py`:** after the plays load, uncached tracks are sent to `https://api.reccobeats.com/v1/audio-features` using Spotify track IDs directly, in batches of 40 (the API's limit; larger requests return HTTP 400). Tracks ReccoBeats does not know are cached as `found = false` and retried after 30 days. 429 responses honour `Retry-After`.
+- **dbt:** `stg_audio_features`, `stg_track_audio_moods` and the mart `daily_audio_mood_summary`, with tests (feature values in [0, 1], accepted mood values, unique track IDs).
+- **Audio mood mapping** (valence x energy, cut-off 0.5): upbeat = high valence + high energy, intense = low valence + high energy, calm = high valence + low energy, mellow = low valence + low energy.
+- **Dashboard:** new "Audio mood (ReccoBeats)" section with a coverage caption.
+- **`pipeline_flow.py`:** now also fetches artist genres and audio features (the original flow skipped the genre fetch).
+- **Caveats:** the features are ReccoBeats' estimates, not Spotify's. Coverage in Johan's data was 15 of 50 tracks (30%) when first tested.
+
 ## Known issues carried over from the original
-- `pipeline_flow.py` does not call `fetch_and_load_artist_genres`, so the scheduled run does not fetch genres for new artists. Only a manual `python ingest.py` does.
 - Spotify's recently-played endpoint returns at most 50 plays, so the pipeline must run regularly to avoid gaps.

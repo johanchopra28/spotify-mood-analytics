@@ -15,6 +15,19 @@ MOOD_COLORS = {
 }
 
 SPOTIFY_GREEN = "#1DB954"
+SPOTIFY_TRACK_URL = "https://open.spotify.com/track/"
+
+def with_spotify_link(df):
+    """Add a clickable 'Spotify' column that opens the track in Spotify."""
+    df = df.copy()
+    df["Spotify"] = SPOTIFY_TRACK_URL + df["track_id"]
+    return df
+
+SPOTIFY_COLUMN = {
+    "Spotify": st.column_config.LinkColumn(
+        "Spotify", display_text="▶ Open", help="Open this track in Spotify"
+    )
+}
 
 @st.cache_resource
 def get_engine():
@@ -40,17 +53,17 @@ def load_data():
     """, engine)
 
     today_tracks = pd.read_sql("""
-        SELECT played_at, track_name, artist_names
+        SELECT played_at, track_id, track_name, artist_names
         FROM dbt_dev.stg_recently_played
         WHERE played_at::date = (SELECT max(played_at::date) FROM dbt_dev.stg_recently_played)
         ORDER BY played_at DESC
     """, engine)
 
     top_tracks_week = pd.read_sql("""
-        SELECT track_name, artist_names, count(*) as plays
+        SELECT track_id, track_name, artist_names, count(*) as plays
         FROM dbt_dev.stg_recently_played
         WHERE played_at >= now() - interval '7 days'
-        GROUP BY track_name, artist_names
+        GROUP BY track_id, track_name, artist_names
         ORDER BY plays DESC
         LIMIT 10
     """, engine)
@@ -372,7 +385,8 @@ if not daily_top_track.empty:
     df = daily_top_track.copy()
     df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
     df = df.rename(columns={"track_name": "Track", "artist_names": "Artist", "play_count": "Plays"})
-    st.dataframe(df[["Date", "Track", "Artist", "Plays"]], width="stretch", hide_index=True)
+    st.dataframe(with_spotify_link(df)[["Date", "Track", "Artist", "Plays", "Spotify"]],
+                 width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
 else:
     st.info("No data yet.")
 
@@ -385,7 +399,8 @@ with col3:
     st.markdown("**🎵 Top tracks**")
     if not top_tracks_week.empty:
         df = top_tracks_week.rename(columns={"track_name": "Track", "artist_names": "Artist", "plays": "Plays"})
-        st.dataframe(df, width="stretch", hide_index=True)
+        st.dataframe(with_spotify_link(df)[["Track", "Artist", "Plays", "Spotify"]],
+                     width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
     else:
         st.info("No data yet.")
 with col4:
@@ -404,7 +419,8 @@ with st.expander("🕒 Today's full play history"):
         df = today_tracks.copy()
         df["Time"] = pd.to_datetime(df["played_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%H:%M")
         df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
-        st.dataframe(df[["Time", "Track", "Artist"]], width="stretch", hide_index=True)
+        st.dataframe(with_spotify_link(df)[["Time", "Track", "Artist", "Spotify"]],
+                     width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
     else:
         st.info("No plays recorded today yet.")
 
@@ -420,7 +436,11 @@ if not discovered_recently.empty:
         for _, row in discovered_recently.iterrows():
             col_a, col_b = st.columns([5, 1])
             with col_a:
-                st.write(f"**{row['track_name']}** — {row['artist_names']} ({row['plays']} plays)")
+                title = row["track_name"].replace("[", "(").replace("]", ")")
+                st.markdown(
+                    f"**[{title}]({SPOTIFY_TRACK_URL}{row['track_id']})** — "
+                    f"{row['artist_names']} ({row['plays']} plays)"
+                )
             with col_b:
                 is_liked = row["track_id"] in liked_ids
                 label = "❤️" if is_liked else "🤍"
@@ -439,6 +459,7 @@ if not liked_tracks.empty:
     df = liked_tracks.copy()
     df["Liked"] = pd.to_datetime(df["liked_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%b %d")
     df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
-    st.dataframe(df[["Track", "Artist", "Liked"]], width="stretch", hide_index=True)
+    st.dataframe(with_spotify_link(df)[["Track", "Artist", "Liked", "Spotify"]],
+                 width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
 else:
     st.info("No liked songs yet — like something from 'Discovered recently' above.")

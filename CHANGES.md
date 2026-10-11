@@ -24,6 +24,8 @@ The history here is a fresh start: the original's commits are not included.
 - **Audio mood mapping** (valence x energy, cut-off 0.5): upbeat = high valence + high energy, intense = low valence + high energy, calm = high valence + low energy, mellow = low valence + low energy.
 - **Dashboard:** new "Audio mood (ReccoBeats)" section with a coverage caption.
 - **`pipeline_flow.py`:** now also fetches artist genres and audio features (the original flow skipped the genre fetch).
+- **Spotify links:** every track shown on the dashboard links to its Spotify page (a "▶ Open" column in the tables, linked titles in "Discovered recently"). `daily_top_track` now carries `track_id`.
+- **Why ReccoBeats misses tracks:** tested on 50 tracks, coverage depends mainly on release year, about 73% for tracks released up to 2024 versus about 11% for 2025 and later. Re-requesting misses (singly or in batch) returns nothing new, so misses are not transient.
 - **Caveats:** the features are ReccoBeats' estimates, not Spotify's. Coverage in Johan's data was 15 of 50 tracks (30%) when first tested.
 
 ## Known issues carried over from the original

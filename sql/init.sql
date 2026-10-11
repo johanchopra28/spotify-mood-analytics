@@ -33,7 +33,8 @@ create table if not exists liked_tracks (
 create table if not exists raw_audio_features (
     track_id         text primary key,
     found            boolean     not null,
-    fetched_at       timestamptz not null default now(),
+    first_fetched_at timestamptz not null default now(),  -- never updated; shows when a miss later turned into a hit
+    fetched_at       timestamptz not null default now(),   -- last attempt
     reccobeats_id    text,
     isrc             text,
     acousticness     double precision,

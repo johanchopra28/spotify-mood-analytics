@@ -140,7 +140,7 @@ def fetch_and_load_artist_genres(artists_dict):
 
 RECCOBEATS_URL = "https://api.reccobeats.com/v1/audio-features"
 RECCOBEATS_BATCH = 40          # API rejects more than 40 ids per request
-MISS_RETRY_DAYS = 30           # retry tracks ReccoBeats did not know after this long
+MISS_RETRY_DAYS = int(os.getenv("RECCOBEATS_RETRY_DAYS", "3"))  # re-ask for tracks ReccoBeats did not know
 AUDIO_COLS = ["acousticness", "danceability", "energy", "instrumentalness",
               "liveness", "loudness", "speechiness", "tempo", "valence", "key", "mode"]
 
@@ -162,12 +162,15 @@ def fetch_audio_batch(track_ids):
 
 def fetch_and_load_audio_features(track_ids):
     """Fetch ReccoBeats audio features for uncached tracks; cache misses as found=false."""
-    track_ids = list(dict.fromkeys(track_ids))
-    if not track_ids:
-        return
-
     conn = get_db_connection()
     cur = conn.cursor()
+    # Also consider every track ever played, so older misses get retried even when
+    # they are not in the latest 50 plays.
+    cur.execute("SELECT DISTINCT track_id FROM raw_recently_played")
+    track_ids = list(dict.fromkeys(list(track_ids) + [r[0] for r in cur.fetchall()]))
+    if not track_ids:
+        cur.close(); conn.close()
+        return
     cur.execute(
         """SELECT track_id FROM raw_audio_features
            WHERE track_id = ANY(%s)

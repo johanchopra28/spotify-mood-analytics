@@ -1,0 +1,11 @@
+spotipy
+python-dotenv
+psycopg2-binary
+requests
+dbt-core
+dbt-postgres
+prefect
+streamlit
+plotly
+pandas
+sqlalchemy<2.1

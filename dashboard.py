@@ -43,8 +43,9 @@ def track_cell(track_id, name, artist, album, image, link=False):
     return f'<span class="tt" tabindex="0">{label}{card}</span>'
 
 def tracks_table(df, cols, meta):
-    """HTML table with hover cover cards. cols = [(header, key)]; key '__track__' is the
-    hover cell and '__link__' the "Open in Spotify" link. meta = DataFrame(track_id, album_name, image_url)."""
+    """HTML table with hover cover cards. cols = [(header, key)]; key '__track__' is the track
+    name: a link that opens the track in Spotify, with the cover card on hover.
+    meta = DataFrame(track_id, album_name, image_url)."""
     d = df.merge(meta, on="track_id", how="left")
     head = "".join(f"<th>{_esc(h)}</th>" for h, _ in cols)
     body = []
@@ -52,9 +53,7 @@ def tracks_table(df, cols, meta):
         tds = []
         for _, key in cols:
             if key == "__track__":
-                tds.append(track_cell(r["track_id"], r["track_name"], r["artist_names"], r.get("album_name"), r.get("image_url")))
-            elif key == "__link__":
-                tds.append(f'<a class="open-link" href="{SPOTIFY_TRACK_URL}{_esc(r["track_id"])}" target="_blank" rel="noopener">&#9654; Open</a>')
+                tds.append(track_cell(r["track_id"], r["track_name"], r["artist_names"], r.get("album_name"), r.get("image_url"), link=True))
             else:
                 tds.append(_esc(r[key]))
         body.append("<tr>" + "".join(f"<td>{t}</td>" for t in tds) + "</tr>")
@@ -71,7 +70,7 @@ TRACK_CSS = """<style>
 .tt .pop img{display:block;width:184px;height:184px;object-fit:cover;border-radius:6px;margin-bottom:6px}
 .tt .pop b{display:block;font-size:.9rem}
 .tt .pop span{display:block;opacity:.75;font-size:.8rem}
-.open-link{text-decoration:none;white-space:nowrap}
+.tt a:hover{text-decoration:underline}
 </style>"""
 
 @st.cache_resource
@@ -464,7 +463,7 @@ if not daily_top_track.empty:
     df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
     df = df.rename(columns={"play_count": "Plays"})
     st.markdown(tracks_table(df, [("Date", "Date"), ("Track", "__track__"), ("Artist", "artist_names"),
-                                  ("Plays", "Plays"), ("", "__link__")], track_meta), unsafe_allow_html=True)
+                                  ("Plays", "Plays")], track_meta), unsafe_allow_html=True)
 else:
     st.info("No data yet.")
 
@@ -478,7 +477,7 @@ with col3:
     if not top_tracks_week.empty:
         df = top_tracks_week.rename(columns={"plays": "Plays"})
         st.markdown(tracks_table(df, [("Track", "__track__"), ("Artist", "artist_names"),
-                                      ("Plays", "Plays"), ("", "__link__")], track_meta), unsafe_allow_html=True)
+                                      ("Plays", "Plays")], track_meta), unsafe_allow_html=True)
     else:
         st.info("No data yet.")
 with col4:
@@ -496,8 +495,7 @@ with st.expander("🕒 Today's full play history"):
     if not today_tracks.empty:
         df = today_tracks.copy()
         df["Time"] = pd.to_datetime(df["played_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%H:%M")
-        st.markdown(tracks_table(df, [("Time", "Time"), ("Track", "__track__"), ("Artist", "artist_names"),
-                                      ("", "__link__")], track_meta), unsafe_allow_html=True)
+        st.markdown(tracks_table(df, [("Time", "Time"), ("Track", "__track__"), ("Artist", "artist_names")], track_meta), unsafe_allow_html=True)
     else:
         st.info("No plays recorded today yet.")
 
@@ -547,6 +545,6 @@ if not liked_tracks.empty:
     df = liked_tracks.copy()
     df["Liked"] = pd.to_datetime(df["liked_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%b %d")
     st.markdown(tracks_table(df, [("Track", "__track__"), ("Artist", "artist_names"),
-                                  ("Liked", "Liked"), ("", "__link__")], track_meta), unsafe_allow_html=True)
+                                  ("Liked", "Liked")], track_meta), unsafe_allow_html=True)
 else:
     st.info("No liked songs yet — like something from 'Discovered recently' above.")

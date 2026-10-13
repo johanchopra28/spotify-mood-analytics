@@ -108,6 +108,18 @@ def load_data():
         ORDER BY 1, minutes DESC
     """, engine)
 
+    audio_tracks = pd.read_sql("""
+        SELECT date_trunc('day', p.played_at) AS listen_date, a.audio_mood AS mood, p.track_id,
+               max(p.track_name) AS track_name, max(p.artist_names) AS artist_names,
+               count(*) AS plays, round(sum(p.duration_minutes)::numeric, 1) AS minutes,
+               max(c.image_url) AS image_url
+        FROM dbt_dev.stg_recently_played p
+        JOIN dbt_dev.stg_track_audio_moods a ON a.track_id = p.track_id
+        LEFT JOIN dbt_dev.stg_track_covers c ON c.track_id = p.track_id
+        GROUP BY 1, 2, 3
+        ORDER BY 1, minutes DESC
+    """, engine)
+
     track_meta = pd.read_sql("""
         SELECT DISTINCT ON (p.track_id) p.track_id, p.album_name, c.image_url
         FROM dbt_dev.stg_recently_played p
@@ -156,11 +168,11 @@ def load_data():
     """, engine)
 
     # pandas converts timestamptz to UTC; day buckets are IST midnights, so convert back
-    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track, audio_mood, mood_tracks):
+    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track, audio_mood, mood_tracks, audio_tracks):
         frame["listen_date"] = pd.to_datetime(frame["listen_date"], utc=True).dt.tz_convert("Asia/Kolkata")
 
     return (daily_listening, daily_mood, dominant_mood, daily_top_track,
-            audio_mood, audio_coverage, track_meta, mood_tracks, today_tracks, top_tracks_week, top_artists_week,
+            audio_mood, audio_coverage, track_meta, mood_tracks, audio_tracks, today_tracks, top_tracks_week, top_artists_week,
             discovered_recently, liked_tracks)
 
 def toggle_like(engine, track_id, track_name, artist_names):
@@ -194,7 +206,7 @@ st.markdown("""
 st.markdown(TRACK_CSS, unsafe_allow_html=True)
 
 (daily_listening, daily_mood, dominant_mood, daily_top_track,
- audio_mood, audio_coverage, track_meta, mood_tracks, today_tracks, top_tracks_week, top_artists_week,
+ audio_mood, audio_coverage, track_meta, mood_tracks, audio_tracks, today_tracks, top_tracks_week, top_artists_week,
  discovered_recently, liked_tracks) = load_data()
 
 title_col, cat_col = st.columns([4, 1])
@@ -305,10 +317,14 @@ st.write("")
 # --- Mood over time (animated, custom HTML/JS) ---
 st.subheader("Mood over time")
 
-if not daily_mood.empty:
+def render_mood_chart(daily_df, tracks_df, empty_msg):
+    """Animated stacked mood chart. Clicking a coloured block lists the songs behind it."""
+    if daily_df.empty:
+        st.info(empty_msg)
+        return
     import json
 
-    df = daily_mood.copy()
+    df = daily_df.copy()
     df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
     df["Mood"] = df["mood"].str.capitalize()
 
@@ -334,7 +350,7 @@ if not daily_mood.empty:
     percent_traces = build_traces("Percent")
 
     # songs behind each coloured block, keyed "Oct 11|Intense", embedded so a click needs no round trip
-    mt = mood_tracks.copy()
+    mt = tracks_df.copy()
     mt["Date"] = pd.to_datetime(mt["listen_date"]).dt.strftime("%b %d")
     mt["Mood"] = mt["mood"].str.capitalize()
     songs = {}
@@ -490,8 +506,9 @@ if not daily_mood.empty:
     """
 
     st.components.v1.html(chart_html, height=800)
-else:
-    st.info("No mood breakdown available yet.")
+
+
+render_mood_chart(daily_mood, mood_tracks, "No mood breakdown available yet.")
 
 st.write("")
 st.subheader("Audio mood (ReccoBeats)")
@@ -501,18 +518,7 @@ st.caption(
     f"available for {int(cov['plays_with_audio'])} of {int(cov['plays'])} plays; "
     "tracks ReccoBeats doesn't know are left out."
 )
-if not audio_mood.empty:
-    df = audio_mood.copy()
-    df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
-    df["Mood"] = df["mood"].str.capitalize()
-    fig_audio = px.bar(
-        df, x="Date", y="minutes_listened", color="Mood",
-        color_discrete_map={k.capitalize(): v for k, v in MOOD_COLORS.items()},
-        labels={"minutes_listened": "Minutes", "Date": ""},
-    )
-    st.plotly_chart(fig_audio, width="stretch")
-else:
-    st.info("No audio-feature data yet.")
+render_mood_chart(audio_mood, audio_tracks, "No audio-feature data yet.")
 
 st.write("")
 st.markdown("---")

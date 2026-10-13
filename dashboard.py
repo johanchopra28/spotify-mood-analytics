@@ -96,6 +96,18 @@ def load_data():
         LEFT JOIN dbt_dev.stg_audio_features a USING (track_id)
     """, engine)
 
+    mood_tracks = pd.read_sql("""
+        SELECT date_trunc('day', p.played_at) AS listen_date, m.mood, p.track_id,
+               max(p.track_name) AS track_name, max(p.artist_names) AS artist_names,
+               count(*) AS plays, round(sum(p.duration_minutes)::numeric, 1) AS minutes,
+               max(c.image_url) AS image_url
+        FROM dbt_dev.stg_recently_played p
+        JOIN dbt_dev.stg_artist_moods m ON m.artist_id = p.primary_artist_id
+        LEFT JOIN dbt_dev.stg_track_covers c USING (track_id)
+        GROUP BY 1, 2, 3
+        ORDER BY 1, minutes DESC
+    """, engine)
+
     track_meta = pd.read_sql("""
         SELECT DISTINCT ON (p.track_id) p.track_id, p.album_name, c.image_url
         FROM dbt_dev.stg_recently_played p
@@ -144,11 +156,11 @@ def load_data():
     """, engine)
 
     # pandas converts timestamptz to UTC; day buckets are IST midnights, so convert back
-    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track, audio_mood):
+    for frame in (daily_listening, daily_mood, dominant_mood, daily_top_track, audio_mood, mood_tracks):
         frame["listen_date"] = pd.to_datetime(frame["listen_date"], utc=True).dt.tz_convert("Asia/Kolkata")
 
     return (daily_listening, daily_mood, dominant_mood, daily_top_track,
-            audio_mood, audio_coverage, track_meta, today_tracks, top_tracks_week, top_artists_week,
+            audio_mood, audio_coverage, track_meta, mood_tracks, today_tracks, top_tracks_week, top_artists_week,
             discovered_recently, liked_tracks)
 
 def toggle_like(engine, track_id, track_name, artist_names):
@@ -182,7 +194,7 @@ st.markdown("""
 st.markdown(TRACK_CSS, unsafe_allow_html=True)
 
 (daily_listening, daily_mood, dominant_mood, daily_top_track,
- audio_mood, audio_coverage, track_meta, today_tracks, top_tracks_week, top_artists_week,
+ audio_mood, audio_coverage, track_meta, mood_tracks, today_tracks, top_tracks_week, top_artists_week,
  discovered_recently, liked_tracks) = load_data()
 
 title_col, cat_col = st.columns([4, 1])
@@ -321,6 +333,21 @@ if not daily_mood.empty:
     minutes_traces = build_traces("minutes_listened")
     percent_traces = build_traces("Percent")
 
+    # songs behind each coloured block, keyed "Oct 11|Intense", embedded so a click needs no round trip
+    mt = mood_tracks.copy()
+    mt["Date"] = pd.to_datetime(mt["listen_date"]).dt.strftime("%b %d")
+    mt["Mood"] = mt["mood"].str.capitalize()
+    songs = {}
+    for (d, m), g in mt.groupby(["Date", "Mood"]):
+        songs[f"{d}|{m}"] = [
+            {"id": r.track_id, "name": r.track_name, "artist": r.artist_names,
+             "plays": int(r.plays), "min": float(r.minutes),
+             "img": r.image_url if isinstance(r.image_url, str) and covers.is_spotify_image(r.image_url) else ""}
+            for r in g.itertuples()
+        ]
+    # keep "</" out of the embedded JSON so it cannot close the script tag
+    songs_json = json.dumps(songs).replace("</", "<" + chr(92) + "/")
+
     chart_html = f"""
     <style>
         .mood-btn {{
@@ -331,16 +358,32 @@ if not daily_mood.empty:
         .mood-btn:hover {{ background:#2a8a3f; transform: translateY(-1px); }}
         .mood-btn.active {{ background:#1DB954; }}
         .mood-btn.active:hover {{ background:#1DB954; }}
+        #mood-chart .nsewdrag {{ cursor: pointer !important; }}
+        #mood-hint {{ font:13px sans-serif; color:#9aa4ad; margin:4px 0 8px; }}
+        #mood-songs {{ max-height:280px; overflow-y:auto; font-family:sans-serif; color:#e0e0e0; }}
+        .songs-head {{ display:flex; align-items:center; gap:8px; font-weight:600; margin:6px 0; }}
+        .songs-head .dot {{ width:10px; height:10px; border-radius:50%; }}
+        .song-row {{ display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid #2a2f35; }}
+        .song-row img, .song-row .ph {{ width:40px; height:40px; border-radius:4px; object-fit:cover; background:#2a2f35; flex:none; }}
+        .song-row .txt {{ flex:1; min-width:0; }}
+        .song-row .txt a {{ color:#e0e0e0; font-weight:600; text-decoration:none; }}
+        .song-row .txt a:hover {{ text-decoration:underline; }}
+        .song-row .txt span {{ display:block; font-size:12px; color:#9aa4ad; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+        .song-row .meta {{ font-size:12px; color:#9aa4ad; white-space:nowrap; }}
     </style>
     <div id="mood-toggle" style="margin-bottom:10px;">
         <button id="btn-minutes" class="mood-btn active" onclick="showView('minutes')">Minutes</button>
         <button id="btn-percent" class="mood-btn" onclick="showView('percent')">% of day</button>
     </div>
     <div id="mood-chart" style="width:100%;height:420px;"></div>
+    <div id="mood-hint">Click a coloured block to see the songs behind it.</div>
+    <div id="mood-songs"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
     <script>
         const minutesData = {json.dumps(minutes_traces)};
         const percentData = {json.dumps(percent_traces)};
+        const songs = {songs_json};
+        const moodColors = {json.dumps(color_map_cap)};
         let currentData = JSON.parse(JSON.stringify(minutesData));
         let currentMode = "minutes";
         let animating = false;
@@ -356,6 +399,53 @@ if not daily_mood.empty:
             legend: {{orientation: "h", y: -0.2}}
         }};
         Plotly.newPlot("mood-chart", currentData, layout, {{responsive: true, displayModeBar: false}});
+
+        function renderSongs(date, mood) {{
+            const box = document.getElementById("mood-songs");
+            const list = songs[date + "|" + mood] || [];
+            box.textContent = "";
+            document.getElementById("mood-hint").textContent = "";
+            const head = document.createElement("div");
+            head.className = "songs-head";
+            const dot = document.createElement("span");
+            dot.className = "dot";
+            dot.style.background = moodColors[mood] || "#999";
+            const total = list.reduce((a, s) => a + s.min, 0);
+            head.appendChild(dot);
+            head.appendChild(document.createTextNode(
+                mood + " - " + date + " - " + list.length + (list.length === 1 ? " song" : " songs") + ", " + total.toFixed(1) + " min"));
+            box.appendChild(head);
+            list.forEach(s => {{
+                const row = document.createElement("div");
+                row.className = "song-row";
+                if (s.img) {{
+                    const im = document.createElement("img");
+                    im.src = s.img; im.alt = "";
+                    row.appendChild(im);
+                }} else {{
+                    const ph = document.createElement("div");
+                    ph.className = "ph";
+                    row.appendChild(ph);
+                }}
+                const txt = document.createElement("div");
+                txt.className = "txt";
+                const a = document.createElement("a");
+                a.href = "https://open.spotify.com/track/" + encodeURIComponent(s.id);
+                a.target = "_blank"; a.rel = "noopener"; a.textContent = s.name;
+                const sub = document.createElement("span");
+                sub.textContent = s.artist;
+                txt.appendChild(a); txt.appendChild(sub);
+                const meta = document.createElement("div");
+                meta.className = "meta";
+                meta.textContent = s.plays + (s.plays === 1 ? " play" : " plays") + ", " + s.min.toFixed(1) + " min";
+                row.appendChild(txt); row.appendChild(meta);
+                box.appendChild(row);
+            }});
+        }}
+        document.getElementById("mood-chart").on("plotly_click", ev => {{
+            const p = ev.points[0];
+            renderSongs(p.x, p.data.name);
+        }});
 
         function showView(mode) {{
             if (animating || mode === currentMode) return;
@@ -399,7 +489,7 @@ if not daily_mood.empty:
     </script>
     """
 
-    st.components.v1.html(chart_html, height=470)
+    st.components.v1.html(chart_html, height=800)
 else:
     st.info("No mood breakdown available yet.")
 

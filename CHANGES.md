@@ -29,6 +29,7 @@ The history here is a fresh start: the original's commits are not included (they
 
 ## Dashboard
 - **Spotify links and cover cards:** every track name on the dashboard is a link that opens the track in Spotify, and hovering it shows a card with the album cover, title, artist and album. This applies to all track tables and to "Discovered recently". Covers come from the Spotify payload at ingest, and from Spotify's keyless oEmbed endpoint for older tracks, and are cached in the new `track_covers` table (dbt model `stg_track_covers`). Only Spotify image hosts are accepted (`covers.py`, with tests). The track tables are HTML tables, so they are no longer sortable. "Discovered recently" no longer sits in a scroll box (it would clip the card), and shows the first 15 rows with the rest under an expander.
+- **Click a mood block to see its songs:** in "Mood over time", clicking a coloured block (in either the minutes or % view) lists the songs behind it for that day, with cover, artist, plays and minutes, each linking to Spotify. The songs are embedded in the chart, so a click needs no page reload. Minutes match the chart (genre-based mood only; the audio mood chart is not clickable).
 - **Audio mood section:** see above.
 - **IST display:** see above.
 

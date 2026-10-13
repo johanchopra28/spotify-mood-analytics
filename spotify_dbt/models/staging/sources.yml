@@ -21,3 +21,8 @@ sources:
         columns:
           - name: track_id
             description: "Spotify's unique ID for the track"
+      - name: track_covers
+        description: "Album cover art URL per Spotify track (from the Spotify payload or oEmbed). image_url is null when none is available."
+        columns:
+          - name: track_id
+            description: "Spotify's unique ID for the track"

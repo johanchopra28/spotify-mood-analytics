@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_track_covers
+    description: "Album cover URL per track, only where one exists. Used for dashboard hover popups."
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique
+      - name: image_url
+        tests:
+          - not_null

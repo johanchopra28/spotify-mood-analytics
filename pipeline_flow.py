@@ -4,7 +4,8 @@ from prefect.schedules import Cron
 
 # Reuse the exact same functions from ingest.py — no duplicate logic
 from ingest import (fetch_recently_played, transform, load, get_unique_artists,
-                    fetch_and_load_artist_genres, fetch_and_load_audio_features)
+                    fetch_and_load_artist_genres, fetch_and_load_audio_features,
+                    fetch_and_load_covers)
 
 @task(retries=2, retry_delay_seconds=30)
 def ingest_task():
@@ -13,6 +14,7 @@ def ingest_task():
     load(rows)
     fetch_and_load_artist_genres(get_unique_artists(raw_tracks))
     fetch_and_load_audio_features([item["track"]["id"] for item in raw_tracks])
+    fetch_and_load_covers([item["track"]["id"] for item in raw_tracks])
 
 @task(retries=1)
 def dbt_run_task():

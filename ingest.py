@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import psycopg2
+import covers
 from psycopg2.extras import execute_values
 
 load_dotenv()
@@ -213,6 +214,32 @@ def fetch_and_load_audio_features(track_ids):
     print(f"ReccoBeats audio features: {n_found} found, {len(rows) - n_found} missing "
           f"(out of {len(rows)} requested).")
 
+def fetch_and_load_covers(track_ids, known=None):
+    """Cache album cover URLs: from the Spotify payload when we have it, else oEmbed."""
+    known = known or {}
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT track_id FROM raw_recently_played")
+    all_ids = list(dict.fromkeys(list(track_ids) + [r[0] for r in cur.fetchall()]))
+    cur.execute("SELECT track_id FROM track_covers WHERE image_url IS NOT NULL AND track_id = ANY(%s)", (all_ids,))
+    have = {r[0] for r in cur.fetchall()}
+    cur.execute("SELECT track_id FROM track_covers WHERE image_url IS NULL AND fetched_at > now() - interval '7 days' AND track_id = ANY(%s)", (all_ids,))
+    recent_miss = {r[0] for r in cur.fetchall()}
+    todo = [t for t in all_ids if t not in have and (t in known or t not in recent_miss)]
+    if not todo:
+        print("No new cover art needed.")
+        cur.close(); conn.close()
+        return
+    found = covers.fetch_missing(todo, known)
+    execute_values(cur, """
+        INSERT INTO track_covers (track_id, image_url) VALUES %s
+        ON CONFLICT (track_id) DO UPDATE SET image_url = EXCLUDED.image_url, fetched_at = now()
+    """, list(found.items()))
+    conn.commit()
+    cur.close(); conn.close()
+    print(f"Cover art: {sum(1 for u in found.values() if u)} found, {sum(1 for u in found.values() if not u)} unavailable.")
+
+
 if __name__ == "__main__":
     raw_tracks = fetch_recently_played()
 
@@ -222,3 +249,7 @@ if __name__ == "__main__":
     artists = get_unique_artists(raw_tracks)
     fetch_and_load_artist_genres(artists)
     fetch_and_load_audio_features([item["track"]["id"] for item in raw_tracks])
+    fetch_and_load_covers(
+        [item["track"]["id"] for item in raw_tracks],
+        {item["track"]["id"]: covers.pick_image(item["track"]["album"].get("images")) for item in raw_tracks},
+    )

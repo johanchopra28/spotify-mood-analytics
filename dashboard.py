@@ -5,7 +5,10 @@ import plotly.express as px
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
+import html as _html
+
 import cat_meme
+import covers
 
 load_dotenv()
 
@@ -24,17 +27,52 @@ def weekly_cat(mood, week):
     return cat_meme.get_cat_meme(mood, week)
 SPOTIFY_TRACK_URL = "https://open.spotify.com/track/"
 
-def with_spotify_link(df):
-    """Add a clickable 'Spotify' column that opens the track in Spotify."""
-    df = df.copy()
-    df["Spotify"] = SPOTIFY_TRACK_URL + df["track_id"]
-    return df
+def _esc(v):
+    return _html.escape("" if v is None else str(v), quote=True)
 
-SPOTIFY_COLUMN = {
-    "Spotify": st.column_config.LinkColumn(
-        "Spotify", display_text="▶ Open", help="Open this track in Spotify"
-    )
-}
+def track_cell(track_id, name, artist, album, image, link=False):
+    """Track name that shows a card with the album cover when hovered."""
+    img = ""
+    if image and covers.is_spotify_image(image):
+        img = f'<img src="{_esc(image)}" alt="">'
+    card = (f'<span class="pop">{img}<b>{_esc(name)}</b>'
+            f'<span>{_esc(artist)}</span><span>{_esc(album)}</span></span>')
+    label = _esc(name)
+    if link:
+        label = f'<a href="{SPOTIFY_TRACK_URL}{_esc(track_id)}" target="_blank" rel="noopener">{label}</a>'
+    return f'<span class="tt" tabindex="0">{label}{card}</span>'
+
+def tracks_table(df, cols, meta):
+    """HTML table with hover cover cards. cols = [(header, key)]; key '__track__' is the
+    hover cell and '__link__' the "Open in Spotify" link. meta = DataFrame(track_id, album_name, image_url)."""
+    d = df.merge(meta, on="track_id", how="left")
+    head = "".join(f"<th>{_esc(h)}</th>" for h, _ in cols)
+    body = []
+    for _, r in d.iterrows():
+        tds = []
+        for _, key in cols:
+            if key == "__track__":
+                tds.append(track_cell(r["track_id"], r["track_name"], r["artist_names"], r.get("album_name"), r.get("image_url")))
+            elif key == "__link__":
+                tds.append(f'<a class="open-link" href="{SPOTIFY_TRACK_URL}{_esc(r["track_id"])}" target="_blank" rel="noopener">&#9654; Open</a>')
+            else:
+                tds.append(_esc(r[key]))
+        body.append("<tr>" + "".join(f"<td>{t}</td>" for t in tds) + "</tr>")
+    return f'<table class="tt-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
+
+TRACK_CSS = """<style>
+.tt-table{width:100%;border-collapse:collapse;font-size:0.92rem}
+.tt-table th{text-align:left;font-weight:600;opacity:.65;padding:6px 10px;border-bottom:1px solid rgba(128,128,128,.35)}
+.tt-table td{padding:7px 10px;border-bottom:1px solid rgba(128,128,128,.18);vertical-align:middle}
+.tt{position:relative;display:inline-block;font-weight:600;cursor:default;border-bottom:1px dotted rgba(128,128,128,.7)}
+.tt a{color:inherit;text-decoration:none}
+.tt .pop{display:none;position:absolute;left:0;top:100%;z-index:1000;width:200px;padding:8px;border-radius:10px;background:#101418;color:#f1f3f4;border:1px solid #2c333a;box-shadow:0 8px 24px rgba(0,0,0,.4);font-weight:400;line-height:1.3;white-space:normal}
+.tt:hover .pop,.tt:focus-within .pop{display:block}
+.tt .pop img{display:block;width:184px;height:184px;object-fit:cover;border-radius:6px;margin-bottom:6px}
+.tt .pop b{display:block;font-size:.9rem}
+.tt .pop span{display:block;opacity:.75;font-size:.8rem}
+.open-link{text-decoration:none;white-space:nowrap}
+</style>"""
 
 @st.cache_resource
 def get_engine():
@@ -57,6 +95,13 @@ def load_data():
         SELECT count(*) AS plays, count(a.track_id) AS plays_with_audio
         FROM dbt_dev.stg_recently_played p
         LEFT JOIN dbt_dev.stg_audio_features a USING (track_id)
+    """, engine)
+
+    track_meta = pd.read_sql("""
+        SELECT DISTINCT ON (p.track_id) p.track_id, p.album_name, c.image_url
+        FROM dbt_dev.stg_recently_played p
+        LEFT JOIN dbt_dev.stg_track_covers c USING (track_id)
+        ORDER BY p.track_id, p.played_at DESC
     """, engine)
 
     today_tracks = pd.read_sql("""
@@ -104,7 +149,7 @@ def load_data():
         frame["listen_date"] = pd.to_datetime(frame["listen_date"], utc=True).dt.tz_convert("Asia/Kolkata")
 
     return (daily_listening, daily_mood, dominant_mood, daily_top_track,
-            audio_mood, audio_coverage, today_tracks, top_tracks_week, top_artists_week,
+            audio_mood, audio_coverage, track_meta, today_tracks, top_tracks_week, top_artists_week,
             discovered_recently, liked_tracks)
 
 def toggle_like(engine, track_id, track_name, artist_names):
@@ -135,9 +180,10 @@ st.markdown("""
     [data-testid="stMetricValue"] { color: #1DB954; }
 </style>
 """, unsafe_allow_html=True)
+st.markdown(TRACK_CSS, unsafe_allow_html=True)
 
 (daily_listening, daily_mood, dominant_mood, daily_top_track,
- audio_mood, audio_coverage, today_tracks, top_tracks_week, top_artists_week,
+ audio_mood, audio_coverage, track_meta, today_tracks, top_tracks_week, top_artists_week,
  discovered_recently, liked_tracks) = load_data()
 
 title_col, cat_col = st.columns([4, 1])
@@ -416,9 +462,9 @@ st.subheader("Song of the day")
 if not daily_top_track.empty:
     df = daily_top_track.copy()
     df["Date"] = pd.to_datetime(df["listen_date"]).dt.strftime("%b %d")
-    df = df.rename(columns={"track_name": "Track", "artist_names": "Artist", "play_count": "Plays"})
-    st.dataframe(with_spotify_link(df)[["Date", "Track", "Artist", "Plays", "Spotify"]],
-                 width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
+    df = df.rename(columns={"play_count": "Plays"})
+    st.markdown(tracks_table(df, [("Date", "Date"), ("Track", "__track__"), ("Artist", "artist_names"),
+                                  ("Plays", "Plays"), ("", "__link__")], track_meta), unsafe_allow_html=True)
 else:
     st.info("No data yet.")
 
@@ -430,9 +476,9 @@ col3, col4 = st.columns(2)
 with col3:
     st.markdown("**🎵 Top tracks**")
     if not top_tracks_week.empty:
-        df = top_tracks_week.rename(columns={"track_name": "Track", "artist_names": "Artist", "plays": "Plays"})
-        st.dataframe(with_spotify_link(df)[["Track", "Artist", "Plays", "Spotify"]],
-                     width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
+        df = top_tracks_week.rename(columns={"plays": "Plays"})
+        st.markdown(tracks_table(df, [("Track", "__track__"), ("Artist", "artist_names"),
+                                      ("Plays", "Plays"), ("", "__link__")], track_meta), unsafe_allow_html=True)
     else:
         st.info("No data yet.")
 with col4:
@@ -450,9 +496,8 @@ with st.expander("🕒 Today's full play history"):
     if not today_tracks.empty:
         df = today_tracks.copy()
         df["Time"] = pd.to_datetime(df["played_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%H:%M")
-        df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
-        st.dataframe(with_spotify_link(df)[["Time", "Track", "Artist", "Spotify"]],
-                     width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
+        st.markdown(tracks_table(df, [("Time", "Time"), ("Track", "__track__"), ("Artist", "artist_names"),
+                                      ("", "__link__")], track_meta), unsafe_allow_html=True)
     else:
         st.info("No plays recorded today yet.")
 
@@ -464,21 +509,32 @@ st.subheader("🔍 Discovered recently")
 st.caption("New to your history in the last 7 days, and already played more than once.")
 if not discovered_recently.empty:
     liked_ids = set(liked_tracks["track_id"]) if not liked_tracks.empty else set()
-    with st.container(height=320):
-        for _, row in discovered_recently.iterrows():
-            col_a, col_b = st.columns([5, 1])
-            with col_a:
-                title = row["track_name"].replace("[", "(").replace("]", ")")
-                st.markdown(
-                    f"**[{title}]({SPOTIFY_TRACK_URL}{row['track_id']})** — "
-                    f"{row['artist_names']} ({row['plays']} plays)"
-                )
-            with col_b:
-                is_liked = row["track_id"] in liked_ids
-                label = "❤️" if is_liked else "🤍"
-                if st.button(label, key=f"like_{row['track_id']}"):
-                    toggle_like(get_engine(), row["track_id"], row["track_name"], row["artist_names"])
-                    st.rerun()
+    meta_by_id = track_meta.set_index("track_id").to_dict("index")
+    def discovered_row(row):
+        col_a, col_b = st.columns([5, 1])
+        with col_a:
+            m = meta_by_id.get(row["track_id"], {})
+            st.markdown(
+                track_cell(row["track_id"], row["track_name"], row["artist_names"],
+                           m.get("album_name"), m.get("image_url"), link=True)
+                + f" &mdash; {_esc(row['artist_names'])} ({row['plays']} plays)",
+                unsafe_allow_html=True,
+            )
+        with col_b:
+            is_liked = row["track_id"] in liked_ids
+            label = "❤️" if is_liked else "🤍"
+            if st.button(label, key=f"like_{row['track_id']}"):
+                toggle_like(get_engine(), row["track_id"], row["track_name"], row["artist_names"])
+                st.rerun()
+
+    # No scroll box here: a scrolling container would clip the hover cover card.
+    SHOWN = 15
+    for _, row in discovered_recently.head(SHOWN).iterrows():
+        discovered_row(row)
+    if len(discovered_recently) > SHOWN:
+        with st.expander(f"Show {len(discovered_recently) - SHOWN} more"):
+            for _, row in discovered_recently.iloc[SHOWN:].iterrows():
+                discovered_row(row)
 else:
     st.info("No repeated new discoveries in the last 7 days yet.")
 
@@ -490,8 +546,7 @@ st.subheader("❤️ Liked songs")
 if not liked_tracks.empty:
     df = liked_tracks.copy()
     df["Liked"] = pd.to_datetime(df["liked_at"], utc=True).dt.tz_convert("Asia/Kolkata").dt.strftime("%b %d")
-    df = df.rename(columns={"track_name": "Track", "artist_names": "Artist"})
-    st.dataframe(with_spotify_link(df)[["Track", "Artist", "Liked", "Spotify"]],
-                 width="stretch", hide_index=True, column_config=SPOTIFY_COLUMN)
+    st.markdown(tracks_table(df, [("Track", "__track__"), ("Artist", "artist_names"),
+                                  ("Liked", "Liked"), ("", "__link__")], track_meta), unsafe_allow_html=True)
 else:
     st.info("No liked songs yet — like something from 'Discovered recently' above.")

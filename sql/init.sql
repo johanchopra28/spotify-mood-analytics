@@ -50,5 +50,12 @@ create table if not exists raw_audio_features (
     mode             int
 );
 
+-- Album cover art per track (url null = looked up, none available).
+create table if not exists track_covers (
+    track_id   text primary key,
+    image_url  text,
+    fetched_at timestamptz not null default now()
+);
+
 -- Day bucketing in dbt marts and the dashboard follows the session timezone.
 alter database spotify_data set timezone to 'Asia/Kolkata';

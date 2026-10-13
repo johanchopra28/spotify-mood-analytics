@@ -29,6 +29,7 @@ The history here is a fresh start: the original's commits are not included (they
 
 ## Dashboard
 - **Spotify links:** every track shown on the dashboard links to its Spotify page (a "▶ Open" column in the tables, linked titles in "Discovered recently").
+- **Album cover on hover:** hovering a track name in any track table or in "Discovered recently" shows a card with the album cover, title, artist and album. Covers come from the Spotify payload at ingest, and from Spotify's keyless oEmbed endpoint for older tracks, and are cached in the new `track_covers` table (dbt model `stg_track_covers`). Only Spotify image hosts are accepted (`covers.py`, with tests). The track tables are now HTML tables, so they are no longer sortable. "Discovered recently" no longer sits in a scroll box (it would clip the card), and shows the first 15 rows with the rest under an expander.
 - **Audio mood section:** see above.
 - **IST display:** see above.
 

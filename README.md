@@ -42,7 +42,7 @@ Spotify oEmbed (cover art) -----+                      dbt models
 * Surfaces "Discovered recently": tracks new to the listening history in the last 7 days that have already been replayed
 * Lets the user like tracks from the discovery list, persisted to Postgres from the dashboard itself (this does not change anything on Spotify)
 * Shows track names as Spotify links with an album cover card on hover
-* Has a second page comparing the Last.fm genre mood with the ReccoBeats audio mood, song by song
+* Has a Label Comparison page (Last.fm genre mood vs ReccoBeats audio mood, song by song, with the math) and a Song Lookup page (paste a Spotify link to see what ReccoBeats and Last.fm say about it), reached from a top navigation bar
 * Displays it all on an interactive Streamlit dashboard, with an animated mood chart and smooth in-page navigation
 * Runs on a daily schedule via Prefect (20:00 IST), with retries and dbt tests guarding data quality
 
@@ -72,8 +72,11 @@ spotify-mood-pipeline/
   ingest.py                  - fetch, transform, load (Spotify, Last.fm, ReccoBeats, cover art)
   covers.py                  - album cover lookup and validation
   pipeline_flow.py           - Prefect flow: ingest -> dbt run -> dbt test
-  dashboard.py               - Streamlit dashboard
-  pages/1_Label_Comparison.py - second page: Last.fm vs ReccoBeats labels, song by song
+  dashboard.py               - Streamlit entry point: a top navigation bar over the pages below
+  pages/0_Dashboard.py       - the main dashboard
+  pages/1_Label_Comparison.py - Last.fm vs ReccoBeats labels, song by song, with the math
+  pages/2_Song_Lookup.py     - paste a Spotify link, see ReccoBeats and Last.fm data for it
+  lookup.py                  - logic behind the Song Lookup page
   track_ui.py                - shared hover-card and badge helpers
   cat_meme.py                - optional weekly mood cat meme
   docker-compose.yml         - Postgres container (runs sql/init.sql on first start)

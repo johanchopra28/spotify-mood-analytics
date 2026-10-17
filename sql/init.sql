@@ -57,5 +57,25 @@ create table if not exists track_covers (
     fetched_at timestamptz not null default now()
 );
 
+-- Spotify Extended Streaming History (the downloaded export), music plays only.
+-- Loaded by import_history.py. The export's IP address and country are deliberately not stored.
+create table if not exists raw_streaming_history (
+    played_at    timestamptz not null,       -- when the play ended
+    track_id     text        not null,
+    track_name   text,
+    artist_name  text,                       -- album artist, as the export gives it (there is no artist id)
+    album_name   text,
+    ms_played    integer     not null,
+    reason_start text,
+    reason_end   text,
+    skipped      boolean,
+    shuffle      boolean,
+    offline      boolean,
+    incognito    boolean,
+    platform     text,
+    unique (played_at, track_id)
+);
+create index if not exists raw_streaming_history_track_idx on raw_streaming_history (track_id);
+
 -- Day bucketing in dbt marts and the dashboard follows the session timezone.
 alter database spotify_data set timezone to 'Asia/Kolkata';

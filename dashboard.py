@@ -8,6 +8,7 @@ navigation = st.navigation(
         st.Page("pages/0_Dashboard.py", title="Dashboard", icon=":material/headphones:", default=True),
         st.Page("pages/1_Label_Comparison.py", title="Label Comparison", icon=":material/compare_arrows:"),
         st.Page("pages/2_Song_Lookup.py", title="Song Lookup", icon=":material/search:"),
+        st.Page("pages/3_Lifetime_Wrapped.py", title="Lifetime Wrapped", icon=":material/auto_awesome:"),
     ],
     position="top",
 )

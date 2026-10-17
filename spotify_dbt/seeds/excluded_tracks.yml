@@ -1,0 +1,10 @@
+version: 2
+
+seeds:
+  - name: excluded_tracks
+    description: "Tracks left out of every calculation (for example an alarm song). Add a row to exclude more."
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique

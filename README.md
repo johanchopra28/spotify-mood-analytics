@@ -76,6 +76,10 @@ spotify-mood-pipeline/
   pages/0_Dashboard.py       - the main dashboard
   pages/1_Label_Comparison.py - Last.fm vs ReccoBeats labels, song by song, with the math
   pages/2_Song_Lookup.py     - paste a Spotify link, see ReccoBeats and Last.fm data for it
+  pages/3_Lifetime_Wrapped.py - lifetime stats, year/month drill-down, habits, wrapped cards
+  wrapped.py                 - the analysis functions behind that page
+  import_history.py          - load a Spotify Extended Streaming History export
+  history_covers.py          - album covers for the songs the Lifetime page shows
   lookup.py                  - logic behind the Song Lookup page
   track_ui.py                - shared hover-card and badge helpers
   cat_meme.py                - optional weekly mood cat meme
@@ -114,9 +118,10 @@ spotify-mood-pipeline/
 4. Create `spotify_dbt/profiles.yml` (it is gitignored): profile `spotify_dbt`, type `postgres`, host `localhost`, port `5432`, user `spotify_user`, password `spotify_pass`, dbname `spotify_data`, schema `dbt_dev`
 5. `python ingest.py` for a first fetch. The first run opens a browser tab to approve Spotify access
 6. `cd spotify_dbt`, then `dbt deps`, `dbt seed`, `dbt run`, `dbt test`
-7. `streamlit run dashboard.py`
-8. Optional daily schedule (Prefect needs a real server to schedule runs): create a `prefect_meta` database in the same Postgres, run `prefect server start` with `PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://spotify_user:spotify_pass@localhost:5432/prefect_meta`, set `PREFECT_API_URL=http://127.0.0.1:4200/api`, then run `python pipeline_flow.py`
-9. Optional validation analysis: `python analysis/export_mood_data.py`, then `python analysis/validate_moods.py` (for Stata, run `analysis/validate_moods.do` from the `analysis/` folder)
+7. Optional full history: `python import_history.py "<Spotify export .zip>"`, `dbt run` again, then `python history_covers.py`
+8. `streamlit run dashboard.py`
+9. Optional daily schedule (Prefect needs a real server to schedule runs): create a `prefect_meta` database in the same Postgres, run `prefect server start` with `PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://spotify_user:spotify_pass@localhost:5432/prefect_meta`, set `PREFECT_API_URL=http://127.0.0.1:4200/api`, then run `python pipeline_flow.py`
+10. Optional validation analysis: `python analysis/export_mood_data.py`, then `python analysis/validate_moods.py` (for Stata, run `analysis/validate_moods.do` from the `analysis/` folder)
 
 ## Known limitations
 

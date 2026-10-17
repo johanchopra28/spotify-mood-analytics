@@ -26,3 +26,8 @@ sources:
         columns:
           - name: track_id
             description: "Spotify's unique ID for the track"
+      - name: raw_streaming_history
+        description: "Spotify Extended Streaming History (the downloaded export), music plays only, loaded by import_history.py. IP address and country are not stored."
+        columns:
+          - name: track_id
+            description: "Spotify's unique ID for the track"

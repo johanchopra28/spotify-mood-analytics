@@ -73,6 +73,15 @@ The pages are reached from a horizontal tab bar (Dashboard, Label Comparison, So
   - Spotify's recently-played endpoint only returns the last 50 plays, so the fetch saves only plays that are not already stored, and plays beyond the last 50 since the previous run are lost.
 - **`conversations.md`:** a personal running list of ideas and parked topics, also kept out of git locally.
 
+### 13. Full listening history and the "Lifetime Wrapped" page
+- **History import:** `import_history.py "<Spotify export .zip>"` loads the Extended Streaming History (`Streaming_History_Audio_*.json`) into a new table `raw_streaming_history` (about 327,000 plays back to Dec 2019). Plays without a Spotify track ID (podcasts, local files) are skipped, and IP address and country are never copied. Safe to re-run.
+- **Real plays:** a play counts as real only if it lasted 30 seconds or more. All plays 328,229, real plays 188,240 (before the exclusion below).
+- **Excluded tracks:** the seed `excluded_tracks.csv` lists track IDs (both versions of Johan's alarm song) that are removed from `stg_recently_played` and `all_plays`, so they affect no count anywhere. Combined real plays after exclusion: 187,287.
+- **dbt:** new `stg_streaming_history` and `all_plays` (history plus pipeline plays recorded after the export ended). Run `dbt seed` before `dbt run`.
+- **Lifetime Wrapped page** (`pages/3_Lifetime_Wrapped.py`, logic in `wrapped.py`, tests in `tests/test_wrapped.py`): lifetime totals, top songs, artists and eras, milestone plays, streaks and gaps, busiest days; a year-by-year tab where clicking a year shows its months and the song that ruled each month, and clicking a month shows its top songs and artists; time-of-day and weekday heatmaps and a calendar; habits (real vs skipped, discovery, one-day obsessions, comfort songs); forgotten favourites; and a shareable wrapped card per year or lifetime. Re-releases of the same song are merged. Results are cached so clicks stay quick.
+- **`history_covers.py`:** fetches album covers for the songs the page shows so hover cards have art.
+- **Stata:** `analysis/build_real_plays.py` and `analysis/real_plays.do` build and tabulate the table of songs with 30 s or more of play.
+
 ## Optional: weekly mood cat meme (not practical)
 
 > **Flag: not practical.** This is a novelty feature. It depends on a free third-party service (CATAAS) whose tags are user-submitted and unfiltered, so an unwanted image can slip through, and it adds a network call to every dashboard load. The pool of cats per mood is small. Treat it as optional and disable it if you share or host the dashboard.

@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: all_plays
+    description: "Every play: the downloaded Extended Streaming History, then the live pipeline from where the history ends. Excluded tracks (the alarm) are removed. Filter is_real_play for plays of 30 seconds or more."
+    columns:
+      - name: played_at
+        tests:
+          - not_null
+      - name: track_id
+        tests:
+          - not_null
+      - name: source
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['history', 'pipeline']
+      - name: is_real_play
+        tests:
+          - not_null
